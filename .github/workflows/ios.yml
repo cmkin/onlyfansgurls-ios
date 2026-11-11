@@ -1,0 +1,36 @@
+name: Build unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Compile iPhone application
+        run: |
+          xcodebuild -project Gurls.xcodeproj -scheme Gurls -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p output/Payload
+          cp -R build/Build/Products/Release-iphoneos/Gurls.app output/Payload/
+          test -f output/Payload/Gurls.app/Gurls
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' output/Payload/Gurls.app/Info.plist
+          file output/Payload/Gurls.app/Gurls | grep arm64
+          cd output
+          zip -qry Gurls-unsigned.ipa Payload
+          unzip -t Gurls-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gurls-unsigned-IPA
+          path: output/Gurls-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
